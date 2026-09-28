@@ -1,0 +1,6 @@
+{
+  "name": "garde-fous",
+  "description": "Garde-fous de sécurité de l'équipe digitale : scanner de secrets sur commit et push, circuit breaker sur les appels réseau répétés.",
+  "version": "1.0.1",
+  "author": { "name": "Équipe digitale" }
+}

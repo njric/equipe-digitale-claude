@@ -1,0 +1,15 @@
+{
+  "name": "equipe-digitale",
+  "owner": { "name": "Équipe digitale" },
+  "metadata": {
+    "description": "Plugins Claude Code de l'équipe digitale",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "garde-fous",
+      "source": "./plugins/garde-fous",
+      "description": "Scanner de secrets et circuit breaker réseau"
+    }
+  ]
+}
