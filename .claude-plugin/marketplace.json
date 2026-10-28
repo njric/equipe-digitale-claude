@@ -3,7 +3,7 @@
   "owner": { "name": "Équipe digitale" },
   "metadata": {
     "description": "Plugins Claude Code de l'équipe digitale",
-    "version": "1.0.0"
+    "version": "1.2.1"
   },
   "plugins": [
     {
