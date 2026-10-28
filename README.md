@@ -26,26 +26,6 @@ Dans une session Claude Code :
 
 Puis `/hooks` pour vérifier que les hooks apparaissent sur les quatre événements : SessionStart, PreToolUse, PostToolUse, PostToolUseFailure.
 
-## Déploiement à l'équipe
-
-Une fois ce dossier poussé dans un dépôt git de l'organisation, deux voies :
-
-- activer le plugin pour l'organisation depuis la console d'administration, si l'option est proposée ;
-- ou l'ajouter aux paramètres gérés (à vérifier dans la documentation Claude Code avant enregistrement) :
-
-```json
-"extraKnownMarketplaces": {
-  "equipe-digitale": {
-    "source": { "source": "github", "repo": "ORGANISATION/equipe-digitale-claude" }
-  }
-},
-"enabledPlugins": {
-  "garde-fous@equipe-digitale": true
-}
-```
-
-Toute modification du plugin : incrémenter `version` dans `plugins/garde-fous/.claude-plugin/plugin.json`.
-
 ## Vérifications
 
 ### Scanner de secrets
