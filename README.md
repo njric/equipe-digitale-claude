@@ -2,16 +2,31 @@
 
 ## Contenu
 
-`plugins/garde-fous/` : hooks de sécurité communs à l'équipe.
+`plugins/garde-fous/` : hooks de sécurité communs à l'équipe et skill d'éco-conception. Fonctionne sur macOS et Windows.
 
-| Hook | Événement | Rôle |
+| Hook (`scripts/`) | Événement | Rôle |
 |---|---|---|
-| `check-deps.sh` | SessionStart | Avertit si `jq`, `git` ou `awk` manque (les autres hooks se désactivent alors en silence) |
-| `secret-scanner.sh` | PreToolUse (Bash) | Bloque un `git commit` ou `git push` contenant un secret |
-| `circuit-breaker-block.sh` | PreToolUse (Bash) | Suspend 60 s les appels vers un hôte après 3 échecs consécutifs |
-| `circuit-breaker-eval.sh` | PostToolUse et PostToolUseFailure (Bash) | Compte les échecs par hôte (remise à zéro sur succès) |
+| `check-deps.mjs` | SessionStart | Avertit si `git` manque (le scanner de secrets se désactive alors en silence) |
+| `eco-design-reminder.mjs` | SessionStart | Rappelle le skill eco-design sur les projets web (`package.json`) |
+| `secret-scanner.mjs` | PreToolUse (Bash, PowerShell) | Bloque un `git commit` ou `git push` contenant un secret |
+| `eco-design-pr-gate.mjs` | PreToolUse (Bash, PowerShell) | Bloque `gh pr create` sur un projet web si `plans/impact.md` n'a pas été mis à jour |
+| `circuit-breaker-block.mjs` | PreToolUse (Bash, PowerShell) | Suspend 60 s les appels vers un hôte après 3 échecs consécutifs |
+| `circuit-breaker-eval.mjs` | PostToolUse et PostToolUseFailure (Bash, PowerShell) | Compte les échecs par hôte (remise à zéro sur succès) |
 
-Prérequis sur chaque poste : `jq` (`brew install jq`).
+Le skill `eco-design` fournit `skills/eco-design/scripts/measure-bundle.mjs`, qui mesure la taille brute et gzip du build (`dist`, `build`, `out` ou `.next/static`) pour la revue d'impact avant PR.
+
+### Prérequis sur chaque poste
+
+- **Node.js ≥ 18** sur le `PATH` : tous les hooks sont des scripts Node, sans dépendance npm. Sans Node, Claude Code signale chaque hook en erreur (non bloquant).
+  - macOS : `brew install node`
+  - Windows : `winget install OpenJS.NodeJS.LTS`
+- **git** : `brew install git` / `winget install Git.Git`.
+
+`jq` et `awk` ne sont plus nécessaires.
+
+### Windows
+
+Les hooks sont lancés en forme exec (`node <script>`), donc sans shell : ils fonctionnent avec ou sans Git Bash. Les matchers couvrent l'outil `Bash` (Git Bash) et l'outil `PowerShell`. Le circuit breaker reconnaît aussi `Invoke-WebRequest`, `Invoke-RestMethod`, `iwr` et `irm`.
 
 Le formatage automatique n'est volontairement pas inclus : il dépend de la stack et relève de la configuration de chaque projet.
 
@@ -44,7 +59,7 @@ Cas couverts : index classique, `git add ... && git commit`, `git commit -a/-am/
 
 ### Circuit breaker
 
-Fonctionnement : une commande Bash qui échoue (code de sortie non nul) déclenche l'événement PostToolUseFailure, qui incrémente le compteur de l'hôte visé (`hote:port`) ; un succès (PostToolUse) le remet à zéro. Après 3 échecs consécutifs, les appels vers cet hôte sont refusés pendant 60 s, avec un message demandant à Claude de s'arrêter. À l'expiration, un essai est autorisé : s'il échoue, le circuit se rouvre aussitôt. L'état est propre à chaque session (`${TMPDIR}/claude-circuit-breaker-<uid>-<session_id>.json`).
+Fonctionnement : une commande Bash qui échoue (code de sortie non nul) déclenche l'événement PostToolUseFailure, qui incrémente le compteur de l'hôte visé (`hote:port`) ; un succès (PostToolUse) le remet à zéro. Après 3 échecs consécutifs, les appels vers cet hôte sont refusés pendant 60 s, avec un message demandant à Claude de s'arrêter. À l'expiration, un essai est autorisé : s'il échoue, le circuit se rouvre aussitôt. L'état est propre à chaque utilisateur et à chaque session (`claude-circuit-breaker-<uid ou nom d'utilisateur>-<session_id>.json` dans le répertoire temporaire du système).
 
 Test : demander à Claude d'exécuter, **en quatre appels Bash distincts, sans boucle ni enchaînement** :
 
@@ -63,10 +78,18 @@ Limites connues :
 - Le comptage porte sur les appels d'outil, pas sur les requêtes : plusieurs `curl` dans une même commande (boucle, `;`, `&&`) comptent pour un seul échec.
 - Tous les chemins d'un même hôte partagent le compteur, y compris en local : trois échecs sur `localhost:3000` suspendent tout le serveur 60 s.
 
-### Dépendances
+### Tests automatisés
 
 ```
-PATH=/var/empty /bin/bash "$PWD/plugins/garde-fous/scripts/check-deps.sh"
+node --test plugins/garde-fous/tests/
 ```
 
-Doit afficher l'avertissement pour `jq`, `git` et `awk`. Ne pas tester avec `PATH=/usr/bin:/bin` : macOS fournit `jq` dans `/usr/bin`, l'avertissement n'apparaîtrait pas.
+Couvrent le scanner de secrets (dans des dépôts git temporaires), le circuit breaker, la vérification d'impact avant PR, le rappel éco-conception, `check-deps` et le script de mesure. À lancer sur macOS **et** sur Windows avant toute nouvelle version.
+
+### Checklist Windows (à faire sur un poste Windows)
+
+1. `node --test plugins/garde-fous/tests/` : tous les tests passent.
+2. Installer le plugin, puis `/hooks` : les hooks apparaissent sur les quatre événements.
+3. Avec Git Bash installé : refaire le test du scanner de secrets et celui du circuit breaker ci-dessus.
+4. Avec l'outil PowerShell (par défaut sans Git Bash, ou `CLAUDE_CODE_USE_POWERSHELL_TOOL=1`) : demander à Claude `git add -A; git commit -m test` avec la fausse clé, le commit doit être bloqué. Puis 4 appels `Invoke-WebRequest https://httpbin.org/status/500`, le 4e doit être refusé.
+5. Sur un projet web : `node "<chemin du plugin>/skills/eco-design/scripts/measure-bundle.mjs"` après `npm run build` affiche le total gzip.
