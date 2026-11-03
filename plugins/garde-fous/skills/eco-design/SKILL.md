@@ -82,11 +82,19 @@ Template:
 
 Run this review before opening any Pull Request on a web app.
 
-1. **Measure.** Run the project's production build script (`npm run build`).
-   Record the total gzip size reported by the build tool (Vite and most
-   bundlers print it). If the tool does not report it, write a small script
-   in a dedicated `$TMPDIR` subfolder that sums the gzip size of the build
-   output, run it, then delete the subfolder by name.
+1. **Measure.** Run the project's production build script (`npm run build`),
+   then measure its output with the script bundled with this skill (do not
+   write your own):
+
+   ```
+   node "${CLAUDE_SKILL_DIR}/scripts/measure-bundle.mjs" [build-dir]
+   ```
+
+   Without `build-dir`, it measures the first existing folder among `dist`,
+   `build`, `out` and `.next/static`. Pass the folder explicitly for any
+   other build output. Record its "Total gzip" value; the per-type breakdown
+   and the largest files help explain a variation. Add `--json` for a
+   machine-readable report.
 2. **Compare.** Add a row to the "Bundle size" table with the difference
    from the previous entry. Flag any increase above 5 % to the user with
    its cause.
