@@ -1,37 +1,37 @@
 {
-  "description": "Garde-fous de l'équipe digitale : scanner de secrets, circuit breaker réseau et éco-conception",
+  "description": "Garde-fous de l'équipe digitale : scanner de secrets, circuit breaker réseau et éco-conception (macOS et Windows, via Node.js)",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/check-deps.sh\"" },
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/eco-design-reminder.sh\"" }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/check-deps.mjs"] },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/eco-design-reminder.mjs"] }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/circuit-breaker-block.sh\"" },
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/secret-scanner.sh\"" },
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/eco-design-pr-gate.sh\"" }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/circuit-breaker-block.mjs"] },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/secret-scanner.mjs"] },
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/eco-design-pr-gate.mjs"] }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/circuit-breaker-eval.sh\"" }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/circuit-breaker-eval.mjs"] }
         ]
       }
     ],
     "PostToolUseFailure": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/circuit-breaker-eval.sh\"" }
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/circuit-breaker-eval.mjs"] }
         ]
       }
     ]
