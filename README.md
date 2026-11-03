@@ -7,9 +7,11 @@
 | Hook (`scripts/`) | Événement | Rôle |
 |---|---|---|
 | `check-deps.mjs` | SessionStart | Avertit si `git` manque (le scanner de secrets se désactive alors en silence) |
-| `eco-design-reminder.mjs` | SessionStart | Rappelle le skill eco-design sur les projets web (`package.json`) |
+| `eco-design-reminder.mjs` | SessionStart | Rappelle le skill eco-design dans toutes les sessions (y compris un dossier vide, où démarre une nouvelle app) |
 | `secret-scanner.mjs` | PreToolUse (Bash, PowerShell) | Bloque un `git commit` ou `git push` contenant un secret |
 | `eco-design-pr-gate.mjs` | PreToolUse (Bash, PowerShell) | Bloque `gh pr create` sur un projet web si `plans/impact.md` n'a pas été mis à jour |
+
+Un projet est considéré comme web s'il a un `package.json` à la racine ou dans un dossier de premier niveau (`frontend/`, `backend/`…), hors `node_modules`, `vendor`, `dist`, `build` et dossiers cachés.
 | `circuit-breaker-block.mjs` | PreToolUse (Bash, PowerShell) | Suspend 60 s les appels vers un hôte après 3 échecs consécutifs |
 | `circuit-breaker-eval.mjs` | PostToolUse et PostToolUseFailure (Bash, PowerShell) | Compte les échecs par hôte (remise à zéro sur succès) |
 

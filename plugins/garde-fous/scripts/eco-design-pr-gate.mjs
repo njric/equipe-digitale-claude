@@ -2,9 +2,8 @@
 // Blocks PR creation on web projects when plans/impact.md was not updated on
 // the branch (eco-design impact review missing). Fail-open on internal errors.
 
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { runHook, projectDir, tryGit, blockWithMessage } from './lib/hook-io.mjs';
+import { isWebProject } from './lib/web-project.mjs';
 
 // origin/HEAD is missing on repositories created locally then pushed:
 // fall back to the usual default branch names, master included.
@@ -17,7 +16,7 @@ function findBaseBranch() {
 runHook((input) => {
   const command = input.tool_input?.command ?? '';
   if (!/\bgh\s+pr\s+create\b/.test(command)) return;
-  if (!existsSync(join(projectDir(), 'package.json'))) return;
+  if (!isWebProject(projectDir())) return;
 
   const base = findBaseBranch();
   if (!base) return;
