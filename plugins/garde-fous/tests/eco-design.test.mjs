@@ -42,6 +42,14 @@ test('PR gate lets the PR through once plans/impact.md is updated', () => {
   assert.equal(gate(dir, 'gh  pr  create').status, 0);
 });
 
+test('PR gate falls back to origin/master when origin/HEAD is not set', () => {
+  const dir = webRepoOnFeatureBranch();
+  git(dir, 'symbolic-ref', '--delete', 'refs/remotes/origin/HEAD');
+  git(dir, 'update-ref', 'refs/remotes/origin/master', 'refs/remotes/origin/main');
+  git(dir, 'update-ref', '-d', 'refs/remotes/origin/main');
+  assert.equal(gate(dir, 'gh pr create').status, 2);
+});
+
 test('PR gate ignores other commands and non-web projects', () => {
   const dir = webRepoOnFeatureBranch();
   assert.equal(gate(dir, 'gh pr list').status, 0);

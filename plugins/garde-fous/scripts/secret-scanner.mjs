@@ -51,7 +51,6 @@ const KEY_WITH_BARE_VALUE = new RegExp(SENSITIVE_KEY + `[ \\t]*[:=]+[ \\t]*[^"' 
 const QUOTED_VALUE = /"[^"]*"|'[^']*'/g;
 const ALLOWLIST_PRAGMA = /(#|\/\/)[ \t]*pragma:[ \t]*allowlist[ \t]+secret[ \t]*$/;
 const PLACEHOLDER = /env\(|process\.env|os\.environ|getenv|\$\{|<[^>]*>|your[_-]|replace|change-?me|example|placeholder|dummy|fake|todo|xxx|\.\.\./;
-const DIFF_HEADER = /^(\+\+\+ |--- |diff --git |index |@@|new file|deleted file|rename |similarity |Binary files)/;
 
 function isDocFile(path) {
   return /\.example$/.test(path)
@@ -93,21 +92,31 @@ function parseFileHeader(line) {
   return match ? match[1] : null;
 }
 
+// Headers are only parsed before the first hunk of each file: inside a hunk,
+// every line starting with '+' is added content, even "+++ x" or "++ notes".
 function scanDiff(diff) {
   const findings = [];
   let currentFile = '';
   let currentIsDoc = false;
+  let inHunk = false;
 
   for (const rawLine of diff.split('\n')) {
     const line = rawLine.replace(/\r$/, '');
-    if (line.startsWith('+++ ')) {
-      currentFile = parseFileHeader(line) ?? '';
-      currentIsDoc = isDocFile(currentFile);
+    if (line.startsWith('diff --git ')) {
+      inHunk = false;
+      currentFile = '';
       continue;
     }
-    if (DIFF_HEADER.test(line)) continue;
-    // Only real added lines (+ followed by something other than +).
-    if (!/^\+[^+]/.test(line) || !currentFile) continue;
+    if (!inHunk) {
+      if (line.startsWith('+++ ')) {
+        currentFile = parseFileHeader(line) ?? '';
+        currentIsDoc = isDocFile(currentFile);
+      } else if (line.startsWith('@@')) {
+        inHunk = true;
+      }
+      continue;
+    }
+    if (!line.startsWith('+') || !currentFile) continue;
 
     const content = line.slice(1);
     // 1) High confidence: everywhere, BEFORE the allowlist.
@@ -122,43 +131,49 @@ function scanDiff(diff) {
   return findings;
 }
 
-const DIFF_OPTIONS = ['-U0', '--diff-filter=ACM'];
+// Explicit prefixes and no color: user settings (diff.mnemonicPrefix,
+// color.ui=always, external diff tools) must not break header parsing.
+const DIFF_OPTIONS = ['-U0', '--diff-filter=ACM', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/'];
+
+// Top level of the repository Claude is working in, set at hook start.
+let repoDir = '';
+const gitInRepo = (args) => tryGit(args, { cwd: repoDir });
 
 function emptyTreeHash() {
   // Computed rather than hard-coded: the hash differs in SHA-256 repositories.
   return execFileSync('git', ['hash-object', '-t', 'tree', '--stdin'], {
-    cwd: projectDir(), input: '', encoding: 'utf8',
+    cwd: repoDir, input: '', encoding: 'utf8',
   }).trim();
 }
 
 function unpushedDiff() {
-  const upstream = tryGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])?.trim();
-  if (upstream) return tryGit(['diff', ...DIFF_OPTIONS, `${upstream}...HEAD`]) ?? '';
+  const upstream = gitInRepo(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])?.trim();
+  if (upstream) return gitInRepo(['diff', ...DIFF_OPTIONS, `${upstream}...HEAD`]) ?? '';
 
   // No upstream (first publication of the branch): every local commit missing
   // from all remotes.
-  const unpushedCommits = (tryGit(['rev-list', 'HEAD', '--not', '--remotes']) ?? '').trim().split('\n').filter(Boolean);
+  const unpushedCommits = (gitInRepo(['rev-list', 'HEAD', '--not', '--remotes']) ?? '').trim().split('\n').filter(Boolean);
   if (unpushedCommits.length === 0) return '';
   const oldestCommit = unpushedCommits[unpushedCommits.length - 1];
-  const parent = tryGit(['rev-parse', '--verify', '-q', `${oldestCommit}^`])?.trim();
+  const parent = gitInRepo(['rev-parse', '--verify', '-q', `${oldestCommit}^`])?.trim();
   // Root commit (brand-new repository): compare with the empty tree.
-  return tryGit(['diff', ...DIFF_OPTIONS, parent || emptyTreeHash(), 'HEAD']) ?? '';
+  return gitInRepo(['diff', ...DIFF_OPTIONS, parent || emptyTreeHash(), 'HEAD']) ?? '';
 }
 
 // Untracked files rendered as a diff where every line is added.
 function untrackedFilesAsDiff() {
-  const listing = tryGit(['ls-files', '-z', '--others', '--exclude-standard']) ?? '';
+  const listing = gitInRepo(['ls-files', '-z', '--others', '--exclude-standard']) ?? '';
   return listing.split('\0').filter(Boolean).map((relativePath) => {
     let buffer;
     try {
-      buffer = readFileSync(join(projectDir(), relativePath));
+      buffer = readFileSync(join(repoDir, relativePath));
     } catch {
       return '';
     }
     // Same rule as git: a NUL byte in the first 8000 bytes means binary.
     if (buffer.subarray(0, 8000).includes(0)) return '';
     const addedLines = buffer.toString('utf8').split('\n').map((fileLine) => `+${fileLine}`);
-    return [`+++ b/${relativePath}`, ...addedLines].join('\n');
+    return [`diff --git a/${relativePath} b/${relativePath}`, `+++ b/${relativePath}`, '@@ untracked @@', ...addedLines].join('\n');
   }).join('\n');
 }
 
@@ -166,10 +181,10 @@ function commitDiff(command) {
   // At PreToolUse time nothing is staged yet when the command stages by itself.
   const stagesWithAdd = /git[^;&|]*\badd\b/.test(command);
   const commitsAll = /git[^;&|]*\bcommit\b[^;&|]*(\s-[a-zA-Z]*a|\s--all\b)/.test(command);
-  if (!stagesWithAdd && !commitsAll) return tryGit(['diff', '--cached', ...DIFF_OPTIONS]) ?? '';
+  if (!stagesWithAdd && !commitsAll) return gitInRepo(['diff', '--cached', ...DIFF_OPTIONS]) ?? '';
 
-  const hasHead = tryGit(['rev-parse', '--verify', '-q', 'HEAD']) !== null;
-  let diff = tryGit(hasHead ? ['diff', 'HEAD', ...DIFF_OPTIONS] : ['diff', '--cached', ...DIFF_OPTIONS]) ?? '';
+  const hasHead = gitInRepo(['rev-parse', '--verify', '-q', 'HEAD']) !== null;
+  let diff = gitInRepo(hasHead ? ['diff', 'HEAD', ...DIFF_OPTIONS] : ['diff', '--cached', ...DIFF_OPTIONS]) ?? '';
   if (stagesWithAdd) diff += '\n' + untrackedFilesAsDiff();
   return diff;
 }
@@ -179,7 +194,12 @@ runHook((input) => {
   const isCommit = /git .*\bcommit\b/.test(command);
   const isPush = /git .*\bpush\b/.test(command);
   if (!isCommit && !isPush) return;
-  if (tryGit(['rev-parse', '--is-inside-work-tree']) === null) return;
+
+  // The session's current directory (input.cwd) may be a sub-repository of
+  // the project: scan the repository git will actually commit to.
+  const topLevel = tryGit(['rev-parse', '--show-toplevel'], { cwd: input.cwd || projectDir() })?.trim();
+  if (!topLevel) return;
+  repoDir = topLevel;
 
   // Push takes precedence: when the command pushes, inspect unpushed commits.
   const diff = isPush ? unpushedDiff() : commitDiff(command);

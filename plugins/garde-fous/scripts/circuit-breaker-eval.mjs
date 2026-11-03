@@ -4,6 +4,7 @@
 // exit 0 fires PostToolUse. Limit: curl without -f returns 0 on an HTTP error.
 
 import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { runHook } from './lib/hook-io.mjs';
 import { extractEndpoint, stateFilePath } from './lib/endpoint.mjs';
 
@@ -27,8 +28,9 @@ runHook((input) => {
   const attempts = input.hook_event_name === 'PostToolUseFailure' ? previousAttempts + 1 : 0;
   state[endpoint] = { attempts, last: Math.floor(Date.now() / 1000) };
 
-  // Atomic save: a concurrent reader never sees a half-written file.
-  const temporaryFile = `${stateFile}.tmp`;
+  // Atomic save: a concurrent reader never sees a half-written file. The
+  // unique name keeps parallel tool calls from overwriting each other's temp file.
+  const temporaryFile = `${stateFile}.${process.pid}.${randomUUID()}.tmp`;
   writeFileSync(temporaryFile, JSON.stringify(state), { mode: 0o600 });
   renameSync(temporaryFile, stateFile);
 });

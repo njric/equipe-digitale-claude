@@ -6,12 +6,21 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { runHook, projectDir, tryGit, blockWithMessage } from './lib/hook-io.mjs';
 
+// origin/HEAD is missing on repositories created locally then pushed:
+// fall back to the usual default branch names, master included.
+function findBaseBranch() {
+  const remoteHead = tryGit(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])?.trim();
+  if (remoteHead) return remoteHead;
+  return ['origin/main', 'origin/master'].find((candidate) => tryGit(['rev-parse', '--verify', '-q', candidate]) !== null) ?? null;
+}
+
 runHook((input) => {
   const command = input.tool_input?.command ?? '';
   if (!/\bgh\s+pr\s+create\b/.test(command)) return;
   if (!existsSync(join(projectDir(), 'package.json'))) return;
 
-  const base = tryGit(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])?.trim() || 'origin/main';
+  const base = findBaseBranch();
+  if (!base) return;
   // '--' tells git that what precedes is a revision, not a file path.
   const changed = tryGit(['diff', '--name-only', `${base}...HEAD`, '--']);
   if (changed === null) return;

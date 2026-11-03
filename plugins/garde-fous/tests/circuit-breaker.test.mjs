@@ -1,22 +1,16 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
-import { tmpdir, userInfo } from 'node:os';
-import { join } from 'node:path';
 import { runScript, scriptPath, bashInput } from './helpers.mjs';
+import { extractEndpoint, stateFilePath } from '../scripts/lib/endpoint.mjs';
 
 const blockScript = scriptPath('circuit-breaker-block.mjs');
 const evalScript = scriptPath('circuit-breaker-eval.mjs');
 const sessions = [];
 
 after(() => {
-  // Same naming rule as lib/endpoint.mjs; only this test's own state files are removed.
-  const user = typeof process.getuid === 'function'
-    ? String(process.getuid())
-    : userInfo().username.replace(/[^A-Za-z0-9_-]/g, '');
-  for (const session of sessions) {
-    rmSync(join(tmpdir(), `claude-circuit-breaker-${user}-${session}.json`), { force: true });
-  }
+  // Only this test's own state files are removed.
+  for (const session of sessions) rmSync(stateFilePath(session), { force: true });
 });
 
 function newSession() {
@@ -68,6 +62,19 @@ test('PowerShell web cmdlets are tracked', () => {
   const session = newSession();
   for (let i = 0; i < 3; i += 1) failure('Invoke-WebRequest -Uri "https://ps.example.test:8443/x"', session);
   assert.equal(isDenied(preCheck('irm https://ps.example.test:8443/y', session)), true);
+});
+
+test('quotes, brackets and trailing punctuation do not split an endpoint', () => {
+  for (const command of [
+    'irm https://api.x.com',
+    '(iwr "https://api.x.com").Content',
+    "(Invoke-RestMethod -Uri 'https://api.x.com/v1?a=1').items",
+    'curl https://api.x.com;echo done',
+    'curl -f https://api.x.com.',
+  ]) {
+    assert.equal(extractEndpoint(command), 'api.x.com', command);
+  }
+  assert.equal(extractEndpoint('curl https://user:pw@API.x.com:8443/p'), 'api.x.com:8443');
 });
 
 test('non-network commands are ignored', () => {

@@ -20,7 +20,8 @@ export function git(args, options = {}) {
     cwd: options.cwd ?? projectDir(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
-    maxBuffer: 64 * 1024 * 1024,
+    // No limit: a capped buffer would turn a large diff into "nothing to scan".
+    maxBuffer: Infinity,
   });
 }
 

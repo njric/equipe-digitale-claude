@@ -3,24 +3,15 @@
 // nothing. This check makes that visible as soon as the session opens.
 // Node itself needs no check: without it, Claude Code reports every hook as failing.
 
-import { execFileSync } from 'node:child_process';
-import { printJson } from './lib/hook-io.mjs';
+import { printJson, tryGit } from './lib/hook-io.mjs';
 
 const INSTALL_HINT_BY_PLATFORM = {
   darwin: 'brew install git (ou xcode-select --install)',
   win32: 'winget install Git.Git',
 };
 
-function isGitAvailable() {
-  try {
-    execFileSync('git', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-if (!isGitAvailable()) {
+// process.cwd(): the project directory may not exist yet, which would look like a missing git.
+if (tryGit(['--version'], { cwd: process.cwd() }) === null) {
   const hint = INSTALL_HINT_BY_PLATFORM[process.platform] ?? 'installer git avec le gestionnaire de paquets du système';
   printJson({
     systemMessage:

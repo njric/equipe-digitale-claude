@@ -101,6 +101,47 @@ test('detects git commands sent through the PowerShell tool', () => {
   assert.equal(runScript(scanner, input, { cwd: dir, env: { CLAUDE_PROJECT_DIR: dir } }).status, 2);
 });
 
+test('a content line starting with "++ " does not hide the rest of the file', () => {
+  const dir = newRepo();
+  writeFile(dir, 'notes.txt', `++ notes\n+++ fixture\n${FAKE_ASSIGNMENT}\n`);
+  git(dir, 'add', '.');
+  assert.equal(scan(dir, 'git commit -m "x"').status, 2);
+  // Same file left untracked and staged by the command itself.
+  const untrackedDir = newRepo();
+  writeFile(untrackedDir, 'notes.txt', `++ notes\n${FAKE_ASSIGNMENT}\n`);
+  assert.equal(scan(untrackedDir, 'git add . && git commit -m "x"').status, 2);
+});
+
+test('a content line starting with "+" is scanned', () => {
+  const dir = newRepo();
+  writeFile(dir, 'list.yml', `keys:\n+${FAKE_AWS_KEY}\n`);
+  git(dir, 'add', '.');
+  assert.equal(scan(dir, 'git commit -m "x"').status, 2);
+  const untrackedDir = newRepo();
+  writeFile(untrackedDir, 'list.yml', `+${FAKE_AWS_KEY}\n`);
+  assert.equal(scan(untrackedDir, 'git add . && git commit -m "x"').status, 2);
+});
+
+test('scans the repository of the session cwd, not only the project root', () => {
+  const projectRoot = newRepo();
+  const subRepo = newRepo();
+  writeFile(subRepo, 'a.js', `const k = "${FAKE_AWS_KEY}";\n`);
+  writeFile(subRepo, 'src/index.js', '// app\n');
+  const input = bashInput('git add . && git commit -m "x"', { cwd: `${subRepo}/src` });
+  const result = runScript(scanner, input, { cwd: projectRoot, env: { CLAUDE_PROJECT_DIR: projectRoot } });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Fichier: a\.js/);
+});
+
+test('user diff settings do not break the scan', () => {
+  const dir = newRepo();
+  git(dir, 'config', 'diff.mnemonicPrefix', 'true');
+  git(dir, 'config', 'color.ui', 'always');
+  writeFile(dir, 'a.js', `const k = "${FAKE_AWS_KEY}";\n`);
+  git(dir, 'add', '.');
+  assert.equal(scan(dir, 'git commit -m "x"').status, 2);
+});
+
 test('fails open outside a git repository and on invalid input', () => {
   const dir = newRepo();
   removeTempDir(`${dir}/.git`);
