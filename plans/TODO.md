@@ -8,7 +8,7 @@ Plan détaillé : [cross-platform-hooks.md](cross-platform-hooks.md)
 - [x] Portage Node : circuit-breaker-block, circuit-breaker-eval
 - [x] Portage Node : secret-scanner
 - [x] `hooks.json` en forme exec, matcher `Bash|PowerShell` ; suppression des `.sh`
-- [x] Tests `node --test` (27/27 sur macOS)
+- [x] Tests `node --test` (33/33 sur macOS, dont les corrections de la revue de code)
 - [x] README, version 1.3.0
-- [ ] Test manuel macOS dans une session Claude Code (`/hooks`, faux secret, circuit breaker)
+- [x] Test manuel macOS via `--plugin-dir` : hooks `.mjs` chargés, secret sur une ligne `+AKIA…` bloqué au commit (cas que l'ancienne version ne voyait pas)
 - [ ] Checklist Windows du README sur un poste Windows (avec et sans Git Bash)
