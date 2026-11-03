@@ -1,0 +1,7 @@
+# OS metadata (macOS and Windows): never part of the plugin
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dependencies, in case a future plugin or tool installs some
+node_modules/
