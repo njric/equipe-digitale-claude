@@ -1,19 +1,18 @@
 // Hook: SessionStart
-// Reminds Claude of the eco-design skill on web projects only.
+// Reminds Claude of the eco-design skill. Fires in every session: a new app
+// starts from an empty folder, and that first session is where the stack and
+// dependencies are chosen, before any package.json exists.
 
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { runHook, projectDir, printJson } from './lib/hook-io.mjs';
+import { isWebProject } from './lib/web-project.mjs';
+
+const RULES =
+  'apply the eco-design skill when adding a dependency, an image or heavy asset, ' +
+  'a network call or caching, and run its impact review (plans/impact.md) before opening any Pull Request.';
 
 runHook(() => {
-  if (!existsSync(join(projectDir(), 'package.json'))) return;
-  printJson({
-    hookSpecificOutput: {
-      hookEventName: 'SessionStart',
-      additionalContext:
-        'Eco-design: this is a web project. Apply the eco-design skill when adding a dependency, ' +
-        'an image or heavy asset, a network call or caching, and run its impact review ' +
-        '(plans/impact.md) before opening any Pull Request.',
-    },
-  });
+  const additionalContext = isWebProject(projectDir())
+    ? `Eco-design: this is a web project. ${RULES.charAt(0).toUpperCase()}${RULES.slice(1)}`
+    : `Eco-design: if this project is or becomes a web app, ${RULES}`;
+  printJson({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } });
 });

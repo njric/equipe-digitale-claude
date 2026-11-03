@@ -57,15 +57,34 @@ test('PR gate ignores other commands and non-web projects', () => {
   assert.equal(gate(plainRepo, 'gh pr create').status, 0);
 });
 
-test('reminder only fires on web projects', () => {
-  const reminder = scriptPath('eco-design-reminder.mjs');
-  const input = { hook_event_name: 'SessionStart', session_id: 's' };
+test('PR gate detects a web app whose package.json is in a first-level folder', () => {
+  const dir = webRepoOnFeatureBranch();
+  git(dir, 'mv', 'package.json', 'frontend-package.json');
+  writeFile(dir, 'frontend/package.json', '{}\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'split');
+  assert.equal(gate(dir, 'gh pr create').status, 2);
+});
+
+test('PR gate ignores package.json files inside dependency folders', () => {
+  const dir = track(makeRepo());
+  writeFile(dir, 'node_modules/package.json', '{}\n');
+  assert.equal(gate(dir, 'gh pr create').status, 0);
+});
+
+const reminderContext = (dir) => {
+  const result = runScript(scriptPath('eco-design-reminder.mjs'), { hook_event_name: 'SessionStart', session_id: 's' }, { env: { CLAUDE_PROJECT_DIR: dir } });
+  return JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+};
+
+test('reminder states it is a web project when package.json exists', () => {
   const webDir = track(makeTempDir());
-  writeFile(webDir, 'package.json', '{}');
-  const onWeb = runScript(reminder, input, { env: { CLAUDE_PROJECT_DIR: webDir } });
-  assert.equal(JSON.parse(onWeb.stdout).hookSpecificOutput.hookEventName, 'SessionStart');
-  const otherDir = track(makeTempDir());
-  assert.equal(runScript(reminder, input, { env: { CLAUDE_PROJECT_DIR: otherDir } }).stdout, '');
+  writeFile(webDir, 'backend/package.json', '{}');
+  assert.match(reminderContext(webDir), /^Eco-design: this is a web project\. Apply the eco-design skill/);
+});
+
+test('reminder also fires in an empty folder, worded conditionally', () => {
+  assert.match(reminderContext(track(makeTempDir())), /^Eco-design: if this project is or becomes a web app, apply the eco-design skill/);
 });
 
 test('check-deps is silent when git is available', () => {
