@@ -19,7 +19,7 @@ Le skill `eco-design` fournit `skills/eco-design/scripts/measure-bundle.mjs`, qu
 
 - **Node.js ≥ 18** sur le `PATH` : tous les hooks sont des scripts Node, sans dépendance npm. Sans Node, Claude Code signale chaque hook en erreur (non bloquant).
   - macOS : `brew install node`
-  - Windows : `winget install OpenJS.NodeJS.LTS`
+  - Windows : voir [Installer Node.js sous Windows](#installer-nodejs-sous-windows)
 - **git** : `brew install git` / `winget install Git.Git`.
 
 `jq` et `awk` ne sont plus nécessaires.
@@ -27,6 +27,29 @@ Le skill `eco-design` fournit `skills/eco-design/scripts/measure-bundle.mjs`, qu
 ### Windows
 
 Les hooks sont lancés en forme exec (`node <script>`), donc sans shell : ils fonctionnent avec ou sans Git Bash. Les matchers couvrent l'outil `Bash` (Git Bash) et l'outil `PowerShell`. Le circuit breaker reconnaît aussi `Invoke-WebRequest`, `Invoke-RestMethod`, `iwr` et `irm`.
+
+#### Installer Node.js sous Windows
+
+1. **Vérifier s'il est déjà installé.** Dans PowerShell :
+   ```
+   node --version
+   ```
+   Si la version affichée est `v18` ou plus, il n'y a rien à faire. Si la commande est introuvable ou si la version est plus ancienne, continuer.
+
+2. **Installer la version LTS**, avec l'une des deux méthodes :
+   - **winget** (inclus dans Windows 10 et 11), dans PowerShell :
+     ```
+     winget install OpenJS.NodeJS.LTS
+     ```
+   - **Installeur** : télécharger le fichier `.msi` « LTS » sur https://nodejs.org, le lancer et garder les options par défaut. L'option « Add to PATH » doit rester cochée. La case « Tools for Native Modules » n'est pas nécessaire.
+
+   Les deux méthodes demandent les droits administrateur. Sans ces droits, passer par le support informatique.
+
+3. **Fermer toutes les fenêtres de terminal et Claude Code**, puis les rouvrir. Sinon, la mise à jour du `PATH` n'est pas prise en compte.
+
+4. **Vérifier** dans un nouveau PowerShell que `node --version` affiche bien `v18` ou plus. Dans Claude Code, les erreurs de hook au démarrage d'une session doivent avoir disparu.
+
+Si `node` reste introuvable alors que l'installation a réussi, vérifier que `C:\Program Files\nodejs\` figure dans la variable d'environnement `Path` de l'utilisateur ou du système.
 
 Le formatage automatique n'est volontairement pas inclus : il dépend de la stack et relève de la configuration de chaque projet.
 
