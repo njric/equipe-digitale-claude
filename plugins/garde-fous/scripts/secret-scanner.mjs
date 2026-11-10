@@ -20,6 +20,8 @@
 //
 // Escape hatch: a line ENDING with `# pragma: allowlist secret` (or
 // `// pragma: allowlist secret`) is ignored, ONLY for the key = value stage.
+// Adding the pragma is a HUMAN decision: the agent must never add it on its
+// own, it shows the flagged line to the user and waits for their decision.
 //
 // Availability trade-off: fail-open on internal error (runHook), a transient
 // error must never block a legitimate commit.
@@ -62,6 +64,10 @@ function isDocFile(path) {
 function looksSecret(value) {
   if (!value || value.length < 12) return false;
   if (PLACEHOLDER.test(value.toLowerCase())) return false;
+  // Environment variable NAME (e.g. "GITHUB_TOKEN"), not its value.
+  // Only the name is skipped: a hard-coded default such as
+  // os.environ.get("X", "realSecret123") is still detected.
+  if (/^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/.test(value)) return false;
   // Case 1: a letter plus a digit or a base64/url symbol.
   if (/[A-Za-z]/.test(value) && /[0-9+/=_-]/.test(value)) return true;
   // Case 2: long and mixed case (passphrase, alphabetic token).
@@ -213,7 +219,8 @@ runHook((input) => {
     '🚨 ALERTE DE SÉCURITÉ : secret potentiel détecté dans le diff !',
     ...(isPush ? ['(scan des commits non encore poussés)'] : []),
     "Expurgez la valeur (ou passez par une variable d'environnement) avant de continuer.",
-    'Faux positif (étage clé=valeur uniquement) ? Terminez la ligne par : # pragma: allowlist secret',
+    "Faux positif probable ? Ne modifiez PAS la ligne : montrez-la à l'utilisateur et attendez sa décision.",
+    "Seul l'utilisateur peut décider d'ajouter '# pragma: allowlist secret' (étage clé=valeur uniquement).",
     separator,
     ...findings.flatMap(({ file, content }) => [`Fichier: ${file}`, `  ${content}`, separator]),
   ]);
